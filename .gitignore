@@ -1,0 +1,8 @@
+bin/
+obj/
+publish/
+*.user
+
+# Config local de registro como herramienta externa: tiene una ruta hardcodeada a la
+# máquina de quien compila (usá install.ps1 en su lugar, que genera esto dinámicamente).
+PBIExplorer.pbitool.json
