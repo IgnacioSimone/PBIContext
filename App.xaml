@@ -7,38 +7,40 @@
         <ResourceDictionary>
 
             <!-- ============================================================
-                 Paleta — inspirada en macOS Sonoma / iOS
+                 Paleta — "papel y cobre": fondo cálido tipo papel, acento terracota/
+                 cobre en vez del azul genérico de SaaS/IA (Sonoma-blue + gris frío es
+                 el look por defecto de cualquier demo generada por IA; esto se corre
+                 a propósito hacia algo con más carácter editorial).
                  ============================================================ -->
-            <!-- #0068D6 en vez de #0A84FF: mismo azul de acento, pero con contraste
-                 4.6:1 para texto blanco encima (WCAG AA) — #0A84FF daba 3.65:1 y fallaba
-                 en los botones y en el ítem de navegación seleccionado. -->
-            <Color x:Key="AccentColor">#0068D6</Color>
+            <!-- #B54A2C sobre blanco da contraste 5.3:1 (WCAG AA, texto normal). -->
+            <Color x:Key="AccentColor">#B54A2C</Color>
 
-            <SolidColorBrush x:Key="WindowBg"      Color="#F5F5F7" />
-            <SolidColorBrush x:Key="SidebarBg"     Color="#EDEDF0" />
-            <SolidColorBrush x:Key="CardBg"        Color="#FFFFFF" />
-            <SolidColorBrush x:Key="Separator"     Color="#D8D8DE" />
-            <SolidColorBrush x:Key="SeparatorSoft" Color="#EEEEF2" />
+            <SolidColorBrush x:Key="WindowBg"      Color="#F7F2EA" />
+            <SolidColorBrush x:Key="SidebarBg"     Color="#EFE6D8" />
+            <SolidColorBrush x:Key="CardBg"        Color="#FFFDF9" />
+            <SolidColorBrush x:Key="Separator"     Color="#DFD1BC" />
+            <SolidColorBrush x:Key="SeparatorSoft" Color="#F0E7D8" />
 
-            <SolidColorBrush x:Key="Ink"        Color="#1D1D1F" />
-            <SolidColorBrush x:Key="InkDim"     Color="#6E6E73" />
-            <!-- #6B6B70 en vez de #9A9AA0: mismo gris apagado, pero con contraste 4.6:1
-                 sobre blanco (WCAG AA) — #9A9AA0 daba 2.8:1 y los encabezados de columna
-                 de las grillas (que usan este color) llevan información real, no son
-                 decorativos. -->
-            <SolidColorBrush x:Key="InkFaint"   Color="#6B6B70" />
+            <SolidColorBrush x:Key="Ink"        Color="#241E19" />
+            <!-- Grises cálidos (con un pelo de matiz cobre) en vez de grises fríos neutros;
+                 mismo nivel de luminancia que antes, así que el contraste WCAG se mantiene. -->
+            <SolidColorBrush x:Key="InkDim"     Color="#6E5F51" />
+            <SolidColorBrush x:Key="InkFaint"   Color="#6B5C4E" />
 
-            <SolidColorBrush x:Key="Accent"     Color="#0068D6" />
-            <SolidColorBrush x:Key="AccentSoft" Color="#E6F0FE" />
+            <SolidColorBrush x:Key="Accent"     Color="#B54A2C" />
+            <SolidColorBrush x:Key="AccentSoft" Color="#FBE9DD" />
             <SolidColorBrush x:Key="HoverTint"  Color="#00000000" />
-            <SolidColorBrush x:Key="RowAlt"     Color="#FBFBFD" />
-            <SolidColorBrush x:Key="RowHover"   Color="#F4F7FE" />
+            <SolidColorBrush x:Key="RowAlt"     Color="#FBF6EE" />
+            <SolidColorBrush x:Key="RowHover"   Color="#FBEEE2" />
 
             <!-- ============================================================
-                 Tipografía — Segoe UI Variable tiene tamaños ópticos como SF Pro:
-                 Display para títulos, Text para cuerpo, Small para etiquetas.
+                 Tipografía — Bahnschrift (geométrica, condensada, viene con Windows
+                 10/11) para títulos en vez del Segoe UI Variable de siempre: cambia
+                 bastante la personalidad visual sin arriesgar compatibilidad, porque
+                 sigue siendo una fuente del sistema. Cuerpo y etiquetas se quedan en
+                 Segoe UI Variable por legibilidad en grillas densas.
                  ============================================================ -->
-            <FontFamily x:Key="FontDisplay">Segoe UI Variable Display, Segoe UI Variable, Segoe UI</FontFamily>
+            <FontFamily x:Key="FontDisplay">Bahnschrift SemiBold, Bahnschrift, Segoe UI Semibold, Segoe UI</FontFamily>
             <FontFamily x:Key="FontText">Segoe UI Variable Text, Segoe UI Variable, Segoe UI</FontFamily>
             <FontFamily x:Key="FontSmall">Segoe UI Variable Small, Segoe UI Variable, Segoe UI</FontFamily>
             <FontFamily x:Key="FontMono">Cascadia Mono, Consolas, Courier New</FontFamily>
@@ -232,7 +234,7 @@
                                     <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1" />
                                 </Border.RenderTransform>
                                 <Border.Effect>
-                                    <DropShadowEffect Color="#0068D6" Opacity="0.30" BlurRadius="12" ShadowDepth="2" Direction="270" />
+                                    <DropShadowEffect Color="#B54A2C" Opacity="0.30" BlurRadius="12" ShadowDepth="2" Direction="270" />
                                 </Border.Effect>
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   Margin="{TemplateBinding Padding}"
@@ -260,10 +262,10 @@
                                     </BeginStoryboard>
                                 </EventTrigger>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#2E86E0" />
+                                    <Setter TargetName="Bd" Property="Background" Value="#C86540" />
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#0069D9" />
+                                    <Setter TargetName="Bd" Property="Background" Value="#9C3E22" />
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -297,7 +299,7 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#E0E0E6" />
+                                    <Setter TargetName="Bd" Property="Background" Value="#E6DBC9" />
                                     <Setter Property="Foreground" Value="{StaticResource Ink}" />
                                 </Trigger>
                                 <Trigger Property="IsSelected" Value="True">
@@ -335,6 +337,11 @@
                 <Setter Property="EnableRowVirtualization" Value="True" />
                 <Setter Property="EnableColumnVirtualization" Value="True" />
                 <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+                <!-- Explícito: sin esto (y sin ninguna columna Width="*" que "coma" el
+                     espacio sobrante) agrandar una columna angosta puede sacar otras
+                     columnas de la vista sin forma de llegar a ellas. -->
+                <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+                <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
             </Style>
 
             <Style TargetType="DataGridColumnHeader">
@@ -380,6 +387,48 @@
                         <Setter Property="Background" Value="{StaticResource RowHover}" />
                     </Trigger>
                 </Style.Triggers>
+            </Style>
+
+            <!-- ============================================================
+                 Buscador de texto para las grillas grandes
+                 ============================================================ -->
+            <Style x:Key="SearchBox" TargetType="TextBox">
+                <Setter Property="Height" Value="34" />
+                <Setter Property="Padding" Value="12,0" />
+                <Setter Property="FontFamily" Value="{StaticResource FontText}" />
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="Foreground" Value="{StaticResource Ink}" />
+                <Setter Property="Background" Value="{StaticResource CardBg}" />
+                <Setter Property="BorderBrush" Value="{StaticResource Separator}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TextBox">
+                            <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+                                <Grid>
+                                    <TextBlock x:Name="Placeholder" Text="Buscar…"
+                                               Margin="{TemplateBinding Padding}" VerticalAlignment="Center"
+                                               Foreground="{StaticResource InkFaint}" IsHitTestVisible="False"
+                                               Visibility="Collapsed" />
+                                    <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                                                  VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="Text" Value="">
+                                    <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
 
             <!-- Tarjeta reutilizable -->

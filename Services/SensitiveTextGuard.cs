@@ -18,7 +18,13 @@ public static class SensitiveTextGuard
     // entre comillas (ej. Cliente[DNI] = "12345678"), así que solo se enmascara ahí.
     private static readonly Regex Dni = new(@"(?<=[""'])\d{7,8}(?=[""'])", RegexOptions.Compiled);
     private static readonly Regex Cuit = new(@"(?<=[""'])\d{2}-?\d{8}-?\d(?=[""'])|\b\d{2}-\d{8}-\d\b", RegexOptions.Compiled);
-    private static readonly Regex ConnLike = new(@"(?i)(password|pwd|secret|apikey|token)\s*=\s*[""']?[^;""'\s]+", RegexOptions.Compiled);
+    // Cubre credenciales y tokens embebidos en connection strings o query params de
+    // Power Query, más allá de los nombres obvios (password/apikey): parámetros como
+    // ?key=..., client_id=..., auth=... o access_key=... son igual de sensibles y
+    // aparecen seguido en orígenes de datos con autenticación por URL.
+    private static readonly Regex ConnLike = new(
+        @"(?i)\b(password|pwd|secret|api[_-]?key|access[_-]?key|client[_-]?id|auth(?:orization)?|credential|bearer|sig(?:nature)?|token|key)\s*=\s*[""']?[^;""'\s&]+",
+        RegexOptions.Compiled);
 
     /// <summary>Las consultas de Power Query suelen traer rutas locales embebidas
     /// (origen Excel/CSV en el disco de quien armó el modelo), y esa ruta expone su

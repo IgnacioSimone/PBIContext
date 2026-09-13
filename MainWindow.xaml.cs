@@ -1,9 +1,12 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using Microsoft.Win32;
 using PBIExplorer.Models;
 using PBIExplorer.Services;
@@ -17,12 +20,15 @@ public partial class MainWindow : Window
     private const int PowerQueryIndex = 5;
     private const int UsageIndex = 6;
     private const int VisualsIndex = 7;
+    private const int PerformanceIndex = 8;
+    private const int CompareIndex = 9;
 
     private static readonly string LogPath = AppPaths.LogPath;
 
     private ModelSnapshot _model = new();
     private List<VisualFieldUsage> _visuals = new();
     private List<ObjectUsage> _usage = new();
+    private List<PerformanceWarning> _performanceWarnings = new();
     private string _sourceName = "modelo";
 
     public MainWindow()
@@ -42,19 +48,38 @@ public partial class MainWindow : Window
         var args = Environment.GetCommandLineArgs();
         Log($"Inicio. Args: {string.Join(" | ", args)}");
 
-        // Power BI Desktop invoca la herramienta externa como:
-        //   PBIExplorer.exe "localhost:PUERTO" "GUID-de-la-base"
-        if (args.Length >= 3)
+        SetBusy(true);
+        try
         {
-            await ConnectToLiveModelAsync(args[1], args[2]);
+            // Power BI Desktop invoca la herramienta externa como:
+            //   PBIExplorer.exe "localhost:PUERTO" "GUID-de-la-base"
+            if (args.Length >= 3)
+            {
+                await ConnectToLiveModelAsync(args[1], args[2]);
+            }
+
+            // El primer SelectionChanged del ListBox ocurre durante InitializeComponent,
+            // cuando los paneles todavía no existen; hay que aplicar el estado una vez acá.
+            ApplyNavState();
+            RebuildSummary();
+
+            await TryAutoLoadVisualsAsync();
         }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
 
-        // El primer SelectionChanged del ListBox ocurre durante InitializeComponent,
-        // cuando los paneles todavía no existen; hay que aplicar el estado una vez acá.
-        ApplyNavState();
-        RebuildSummary();
-
-        await TryAutoLoadVisualsAsync();
+    /// <summary>Conectar al modelo en vivo y buscar el .pbix en disco pueden tardar
+    /// varios segundos; sin esto, la ventana se ve congelada aunque técnicamente
+    /// responda (ver revisión de UX). Mientras está ocupada, además, no tiene sentido
+    /// dejar exportar — los datos todavía se están cargando.</summary>
+    private void SetBusy(bool busy)
+    {
+        BusyBar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        ExportMarkdownButton.IsEnabled = !busy;
+        ExportJsonButton.IsEnabled = !busy;
     }
 
     // =====================================================================
@@ -84,6 +109,13 @@ public partial class MainWindow : Window
             Log($"Modelo leído: {_model.Tables.Count} tablas, {_model.Columns.Count} columnas, " +
                 $"{_model.Measures.Count} medidas, {_model.Relationships.Count} relaciones, " +
                 $"{_model.PowerQueries.Count} consultas Power Query, {_model.Warnings.Count} advertencias.");
+
+            RebuildPerformanceAnalysis();
+            ReapplyGridFilter(MeasuresSearchBox, MeasuresGrid);
+            ReapplyGridFilter(TablesSearchBox, TablesGrid);
+            ReapplyGridFilter(ColumnsSearchBox, ColumnsGrid);
+            ReapplyGridFilter(RelationshipsSearchBox, RelationshipsGrid);
+            ReapplyGridFilter(PowerQuerySearchBox, PowerQueryGrid);
 
             UpdateStatusForModel();
             ApplyNavState();
@@ -230,6 +262,108 @@ public partial class MainWindow : Window
     }
 
     // =====================================================================
+    // Rendimiento — heurísticas de patrones conocidos como antipatrón, basadas
+    // solo en metadata (ver PerformanceAnalyzer).
+    // =====================================================================
+
+    private void RebuildPerformanceAnalysis()
+    {
+        if (PerformanceGrid is null) return;
+
+        _performanceWarnings = PerformanceAnalyzer.Analyze(_model);
+        PerformanceGrid.ItemsSource = new ObservableCollection<PerformanceWarning>(_performanceWarnings);
+        PerformanceEmptyState.Visibility = _performanceWarnings.Count == 0 && _model.Tables.Count > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    // =====================================================================
+    // Comparar versiones — diff contra un snapshot .json exportado antes
+    // (ver ModelDiffAnalyzer / JsonModelExporter).
+    // =====================================================================
+
+    private void ChooseSnapshotButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = "Snapshot de PBI Context (*.json)|*.json" };
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            var older = JsonModelExporter.Load(dialog.FileName);
+            var diff = ModelDiffAnalyzer.Compare(older.Model, _model);
+
+            CompareGrid.ItemsSource = new ObservableCollection<ModelDiffEntry>(diff);
+            CompareGrid.Visibility = Visibility.Visible;
+            CompareEmptyState.Visibility = Visibility.Collapsed;
+
+            var when = older.ExportedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+            StatusText.Text = diff.Count == 0
+                ? $"Sin cambios contra el snapshot de {older.SourceName} del {when}."
+                : $"{diff.Count} cambios contra el snapshot de {older.SourceName} del {when}.";
+        }
+        catch (Exception ex)
+        {
+            Log($"ERROR comparando snapshot: {ex}");
+            MessageBox.Show($"No se pudo leer ese snapshot.\n\n{ex.Message}",
+                AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    // =====================================================================
+    // Buscador de texto en las grillas — genérico por reflexión: cualquier
+    // propiedad string del modelo bindeado cuenta para el filtro, así no hay
+    // que mantener una lista de campos "buscables" por tipo a mano.
+    // =====================================================================
+
+    private static readonly Dictionary<Type, PropertyInfo[]> SearchablePropsCache = new();
+
+    private static bool MatchesSearch(object item, string search)
+    {
+        var type = item.GetType();
+        if (!SearchablePropsCache.TryGetValue(type, out var props))
+        {
+            props = type.GetProperties().Where(p => p.PropertyType == typeof(string) && p.GetIndexParameters().Length == 0).ToArray();
+            SearchablePropsCache[type] = props;
+        }
+
+        foreach (var p in props)
+        {
+            if (p.GetValue(item) is string value && value.Contains(search, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private void GridSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is not TextBox searchBox) return;
+        var grid = searchBox.Name switch
+        {
+            nameof(MeasuresSearchBox) => MeasuresGrid,
+            nameof(TablesSearchBox) => TablesGrid,
+            nameof(ColumnsSearchBox) => ColumnsGrid,
+            nameof(RelationshipsSearchBox) => RelationshipsGrid,
+            nameof(PowerQuerySearchBox) => PowerQueryGrid,
+            _ => null
+        };
+        if (grid is not null) ApplyGridFilter(searchBox, grid);
+    }
+
+    private static void ApplyGridFilter(TextBox searchBox, DataGrid grid)
+    {
+        var view = CollectionViewSource.GetDefaultView(grid.ItemsSource);
+        if (view is null) return;
+
+        var text = searchBox.Text;
+        view.Filter = string.IsNullOrWhiteSpace(text) ? null : item => MatchesSearch(item, text);
+    }
+
+    /// <summary>El ItemsSource de cada grilla se reemplaza entero al recargar el modelo
+    /// (nueva ObservableCollection), lo que resetea cualquier filtro puesto sobre la
+    /// vista anterior — esto lo vuelve a aplicar con el texto que ya estaba escrito.</summary>
+    private static void ReapplyGridFilter(TextBox searchBox, DataGrid grid) => ApplyGridFilter(searchBox, grid);
+
+    // =====================================================================
     // Resumen — análisis heurístico local, sin IA, de qué muestra el tablero
     // =====================================================================
 
@@ -293,7 +427,7 @@ public partial class MainWindow : Window
             Duration = TimeSpan.FromMilliseconds(260),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         });
-        if (card.RenderTransform is TransformGroup group && group.Children[1] is TranslateTransform tt)
+        if (card.RenderTransform is TranslateTransform tt)
         {
             tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation
             {
@@ -304,24 +438,29 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Elevación sutil al pasar el mouse — misma curva que ya usan los botones,
-    /// nada de bitmaps ni blur pesado: dos DoubleAnimation sobre un ScaleTransform.</summary>
+    /// <summary>Elevación sutil al pasar el mouse. Antes escalaba la tarjeta entera con un
+    /// ScaleTransform — cualquier factor distinto de 1.0 obliga a WPF a resamplear el texto
+    /// ya rasterizado (por el DropShadowEffect de la tarjeta), lo que se veía borroso durante
+    /// y después del hover. Ahora solo se traslada (sin reescalar nada) y se anima la sombra
+    /// propia de la tarjeta — ninguna de las dos cosas fuerza un resampleo del texto.</summary>
     private static void AttachHoverLift(Border card)
     {
-        if (card.RenderTransform is not TransformGroup group || group.Children[0] is not ScaleTransform scale) return;
+        if (card.RenderTransform is not TranslateTransform translate) return;
+        var shadow = card.Effect as DropShadowEffect;
 
-        void Animate(double to) => AnimateScale(scale, to);
+        void Animate(double toY, double toBlur, double toOpacity, double toDepth)
+        {
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var duration = TimeSpan.FromMilliseconds(160);
+            translate.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(toY, duration) { EasingFunction = ease });
+            if (shadow is null) return;
+            shadow.BeginAnimation(DropShadowEffect.BlurRadiusProperty, new DoubleAnimation(toBlur, duration));
+            shadow.BeginAnimation(DropShadowEffect.OpacityProperty, new DoubleAnimation(toOpacity, duration));
+            shadow.BeginAnimation(DropShadowEffect.ShadowDepthProperty, new DoubleAnimation(toDepth, duration));
+        }
 
-        card.MouseEnter += (_, _) => Animate(1.025);
-        card.MouseLeave += (_, _) => Animate(1.0);
-    }
-
-    private static void AnimateScale(ScaleTransform scale, double to)
-    {
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        var duration = TimeSpan.FromMilliseconds(160);
-        scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(to, duration) { EasingFunction = ease });
-        scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(to, duration) { EasingFunction = ease });
+        card.MouseEnter += (_, _) => Animate(-3, 26, 0.12, 6);
+        card.MouseLeave += (_, _) => Animate(0, 18, 0.05, 3);
     }
 
     private Border BuildTile(string icon, string label, int value, string? sub)
@@ -358,11 +497,10 @@ public partial class MainWindow : Window
             MinHeight = 152,
             Padding = new Thickness(20),
             Margin = new Thickness(0, 0, 14, 14),
-            RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = new TransformGroup
-            {
-                Children = { new ScaleTransform(), new TranslateTransform() }
-            },
+            RenderTransform = new TranslateTransform(),
+            // Sombra propia (no la del Style "Card", que es una única instancia compartida
+            // por todas las tarjetas): así el hover anima solo la tarjeta bajo el mouse.
+            Effect = new DropShadowEffect { Color = Colors.Black, Opacity = 0.05, BlurRadius = 18, ShadowDepth = 3, Direction = 270 },
             Child = stack
         };
         AttachHoverLift(card);
@@ -404,10 +542,15 @@ public partial class MainWindow : Window
     /// todavía no existen.
     /// </summary>
     private UIElement[]? Panes =>
-        SummaryScroll is null || MeasuresGrid is null || TablesGrid is null || ColumnsGrid is null ||
-        RelationshipsGrid is null || PowerQueryGrid is null || UsagePane is null || VisualsPane is null
+        SummaryScroll is null || MeasuresPane is null || TablesPane is null || ColumnsPane is null ||
+        RelationshipsPane is null || PowerQueryPane is null || UsagePane is null || VisualsPane is null ||
+        PerformancePane is null || ComparePane is null
             ? null
-            : new UIElement[] { SummaryScroll, MeasuresGrid, TablesGrid, ColumnsGrid, RelationshipsGrid, PowerQueryGrid, UsagePane, VisualsPane };
+            : new UIElement[]
+            {
+                SummaryScroll, MeasuresPane, TablesPane, ColumnsPane, RelationshipsPane, PowerQueryPane,
+                UsagePane, VisualsPane, PerformancePane, ComparePane
+            };
 
     private void NavList_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyNavState();
 
@@ -483,6 +626,16 @@ public partial class MainWindow : Window
             var unused = _usage.Count(u => u.IsUnused);
             StatusText.Text = $"{unused} de {_usage.Count} objetos sin ningún uso detectado — cruza visuales, DAX y relaciones.";
         }
+        else if (index == PerformanceIndex)
+        {
+            StatusText.Text = _performanceWarnings.Count == 0
+                ? "Heurísticas sobre metadata — sin patrones de riesgo detectados."
+                : $"{_performanceWarnings.Count} alertas — heurísticas sobre metadata, no un profiler real.";
+        }
+        else if (index == CompareIndex)
+        {
+            StatusText.Text = "Elegí un snapshot .json exportado antes para ver qué cambió.";
+        }
         else if (isModelSection)
         {
             UpdateStatusForModel();
@@ -507,97 +660,7 @@ public partial class MainWindow : Window
     // Exportación
     // =====================================================================
 
-    private void ExportCsvButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (NavList.SelectedIndex == SummaryIndex)
-        {
-            MessageBox.Show("El resumen es texto libre, no una tabla — incluilo con \"Exportar a Word\".",
-                AppName, MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var (name, headers, rows) = NavList.SelectedIndex switch
-        {
-            1 => ("Medidas",
-                new[] { "Tabla", "Medida", "Carpeta", "DAX", "Formato", "Oculta", "Descripción" },
-                _model.Measures.Select(m => new object?[]
-                    { m.Table, m.Name, m.DisplayFolder, SensitiveTextGuard.Mask(m.Expression), m.FormatString, m.IsHidden, SensitiveTextGuard.Mask(m.Description) })),
-
-            2 => ("Tablas",
-                new[] { "Tabla", "Columnas", "Medidas", "Descripción", "Oculta" },
-                _model.Tables.Select(t => new object?[]
-                    { t.Name, t.ColumnCount, t.MeasureCount, SensitiveTextGuard.Mask(t.Description), t.IsHidden })),
-
-            3 => ("Columnas",
-                new[] { "Tabla", "Columna", "Tipo de dato", "Origen", "Carpeta", "DAX / Columna origen", "Oculta" },
-                _model.Columns.Select(c => new object?[]
-                    { c.Table, c.Name, c.DataType, c.ColumnType, c.DisplayFolder, SensitiveTextGuard.Mask(c.DaxOrSource), c.IsHidden })),
-
-            4 => ("Relaciones",
-                new[] { "Desde", "Columna", "Hacia", "Columna", "Cardinalidad", "Filtro cruzado", "Activa" },
-                _model.Relationships.Select(r => new object?[]
-                    { r.FromTable, r.FromColumn, r.ToTable, r.ToColumn, r.Cardinality, r.CrossFilterBehavior, r.IsActive })),
-
-            PowerQueryIndex => ("PowerQuery",
-                new[] { "Nombre", "Tipo", "Código M", "Descripción" },
-                _model.PowerQueries.Select(p => new object?[]
-                    { p.Name, p.Kind, SensitiveTextGuard.Mask(p.MCode), SensitiveTextGuard.Mask(p.Description) })),
-
-            UsageIndex => ("UsoYLimpieza",
-                new[] { "Tipo", "Tabla", "Nombre", "Estado", "Depende de", "Usado por" },
-                _usage.Select(u => new object?[]
-                    { u.Kind, u.Table, u.Name, u.Status, u.DependsOnText, u.UsedByText })),
-
-            VisualsIndex => ("Visuales",
-                new[] { "Página", "Visual", "Título", "Tipo", "Tabla", "Campo" },
-                _visuals.Select(v => new object?[]
-                    { v.Page, v.VisualType, SensitiveTextGuard.Mask(v.Title), v.FieldKind, v.Table, v.Field })),
-
-            _ => (null, Array.Empty<string>(), Enumerable.Empty<object?[]>())
-        };
-
-        if (name is null || !rows.Any())
-        {
-            MessageBox.Show("No hay datos cargados en esta sección todavía.",
-                AppName, MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var dialog = new SaveFileDialog { Filter = "CSV (*.csv)|*.csv", FileName = $"{name}_{_sourceName}.csv" };
-        if (dialog.ShowDialog() != true) return;
-
-        CsvExporter.Export(dialog.FileName, headers, rows);
-        MessageBox.Show("Exportado correctamente.", AppName, MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-
-    private void ExportWordButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_model.Tables.Count == 0 && _model.Measures.Count == 0 && _visuals.Count == 0)
-        {
-            MessageBox.Show("No hay nada cargado todavía — conectate a un modelo o abrí un .pbix primero.",
-                AppName, MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var dialog = new SaveFileDialog { Filter = "Word (*.docx)|*.docx", FileName = $"Documentacion_{_sourceName}.docx" };
-        if (dialog.ShowDialog() != true) return;
-
-        try
-        {
-            var summary = SummaryBuilder.Build(_model, _visuals);
-            DocxExporter.ExportFullDocumentation(dialog.FileName, _sourceName,
-                _model.Tables, _model.Columns, _model.Measures, _model.Relationships, _model.PowerQueries, _visuals, summary, _usage);
-            MessageBox.Show("Documento generado correctamente.", AppName, MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            Log($"ERROR generando Word: {ex}");
-            MessageBox.Show($"No se pudo generar el documento.\n\n{ex.Message}",
-                AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
-    private void ExportAiButton_Click(object sender, RoutedEventArgs e)
+    private void ExportMarkdownButton_Click(object sender, RoutedEventArgs e)
     {
         if (_model.Tables.Count == 0 && _model.Measures.Count == 0 && _visuals.Count == 0)
         {
@@ -620,6 +683,33 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             Log($"ERROR generando contexto IA: {ex}");
+            MessageBox.Show($"No se pudo generar el archivo.\n\n{ex.Message}",
+                AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void ExportJsonButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_model.Tables.Count == 0 && _model.Measures.Count == 0 && _visuals.Count == 0)
+        {
+            MessageBox.Show("No hay nada cargado todavía — conectate a un modelo o abrí un .pbix primero.",
+                AppName, MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = $"Snapshot_{_sourceName}.json" };
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            JsonModelExporter.Export(dialog.FileName, _sourceName, _model, _visuals, _usage);
+            MessageBox.Show(
+                "Listo. Guardá este archivo — más adelante podés usarlo en \"Comparar versiones\" para ver qué cambió.",
+                AppName, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Log($"ERROR generando JSON: {ex}");
             MessageBox.Show($"No se pudo generar el archivo.\n\n{ex.Message}",
                 AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
         }

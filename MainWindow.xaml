@@ -29,7 +29,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#E1E1E7" />
+                                <Setter TargetName="Bd" Property="Background" Value="#E6DBC9" />
                                 <Setter Property="Foreground" Value="{StaticResource Ink}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
@@ -83,7 +83,7 @@
                 </StackPanel>
 
                 <Border DockPanel.Dock="Bottom" Margin="18,10,18,18" Padding="13,11"
-                        Background="#E3E3E9" CornerRadius="10">
+                        Background="#EBE0CE" CornerRadius="10">
                     <StackPanel>
                         <TextBlock Text="PRIVACIDAD"
                                    FontFamily="{StaticResource FontSmall}" FontSize="9.5"
@@ -108,6 +108,8 @@
                     <ListBoxItem Content="Power Query (M)"    Tag="&#xE8B5;" />
                     <ListBoxItem Content="Uso y limpieza"     Tag="&#xE74D;" />
                     <ListBoxItem Content="Visuales y campos"  Tag="&#xE9D9;" />
+                    <ListBoxItem Content="Rendimiento"        Tag="&#xE7BA;" />
+                    <ListBoxItem Content="Comparar versiones" Tag="&#xE8AB;" />
                 </ListBox>
             </DockPanel>
         </Border>
@@ -135,16 +137,17 @@
                                Foreground="{StaticResource InkDim}"
                                TextWrapping="Wrap" Margin="0,5,0,0"
                                Text="Sin conexión — abrí esta herramienta desde Power BI Desktop." />
+                    <ProgressBar x:Name="BusyBar" IsIndeterminate="True" Height="2" Margin="0,8,0,0"
+                                 Foreground="{StaticResource Accent}" Background="Transparent" BorderThickness="0"
+                                 Visibility="Collapsed" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="ChoosePbixButton" Content="Abrir .pbix"
                             Style="{StaticResource SoftButton}" Click="ChoosePbixButton_Click" />
-                    <Button x:Name="ExportCsvButton" Content="Exportar CSV"
-                            Style="{StaticResource SoftButton}" Click="ExportCsvButton_Click" />
-                    <Button x:Name="ExportWordButton" Content="Exportar a Word"
-                            Style="{StaticResource SoftButton}" Click="ExportWordButton_Click" />
-                    <Button x:Name="ExportAiButton" Content="Contexto para IA"
-                            Style="{StaticResource AccentButton}" Click="ExportAiButton_Click" />
+                    <Button x:Name="ExportJsonButton" Content="Exportar JSON"
+                            Style="{StaticResource SoftButton}" Click="ExportJsonButton_Click" />
+                    <Button x:Name="ExportMarkdownButton" Content="Exportar Markdown"
+                            Style="{StaticResource AccentButton}" Click="ExportMarkdownButton_Click" />
                 </StackPanel>
             </Grid>
 
@@ -156,65 +159,105 @@
                     </ScrollViewer>
 
                     <!-- 1 · Medidas -->
-                    <DataGrid x:Name="MeasuresGrid" AutoGenerateColumns="False" IsReadOnly="True">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="TABLA" Binding="{Binding Table}" Width="160" />
-                            <DataGridTextColumn Header="MEDIDA" Binding="{Binding Name}" Width="230" />
-                            <DataGridTextColumn Header="CARPETA" Binding="{Binding DisplayFolder}" Width="150" />
-                            <DataGridTextColumn Header="DAX" Binding="{Binding Expression}" Width="*"
-                                                FontFamily="{StaticResource FontMono}" FontSize="11.5" />
-                            <DataGridTextColumn Header="FORMATO" Binding="{Binding FormatString}" Width="110" />
-                            <DataGridCheckBoxColumn Header="OCULTA" Binding="{Binding IsHidden}" Width="72" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid x:Name="MeasuresPane">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBox x:Name="MeasuresSearchBox" Grid.Row="0" Margin="16,14,16,0"
+                                 Style="{StaticResource SearchBox}" TextChanged="GridSearchBox_TextChanged" />
+                        <DataGrid x:Name="MeasuresGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="TABLA" Binding="{Binding Table}" Width="160" />
+                                <DataGridTextColumn Header="MEDIDA" Binding="{Binding Name}" Width="230" />
+                                <DataGridTextColumn Header="CARPETA" Binding="{Binding DisplayFolder}" Width="150" />
+                                <DataGridTextColumn Header="DAX" Binding="{Binding Expression}" Width="420"
+                                                    FontFamily="{StaticResource FontMono}" FontSize="11.5" />
+                                <DataGridTextColumn Header="FORMATO" Binding="{Binding FormatString}" Width="110" />
+                                <DataGridCheckBoxColumn Header="OCULTA" Binding="{Binding IsHidden}" Width="72" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
 
                     <!-- 2 · Tablas -->
-                    <DataGrid x:Name="TablesGrid" AutoGenerateColumns="False" IsReadOnly="True" Visibility="Collapsed">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="TABLA" Binding="{Binding Name}" Width="300" />
-                            <DataGridTextColumn Header="COLUMNAS" Binding="{Binding ColumnCount}" Width="110" />
-                            <DataGridTextColumn Header="MEDIDAS" Binding="{Binding MeasureCount}" Width="110" />
-                            <DataGridTextColumn Header="DESCRIPCIÓN" Binding="{Binding Description}" Width="*" />
-                            <DataGridCheckBoxColumn Header="OCULTA" Binding="{Binding IsHidden}" Width="72" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid x:Name="TablesPane" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBox x:Name="TablesSearchBox" Grid.Row="0" Margin="16,14,16,0"
+                                 Style="{StaticResource SearchBox}" TextChanged="GridSearchBox_TextChanged" />
+                        <DataGrid x:Name="TablesGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="TABLA" Binding="{Binding Name}" Width="300" />
+                                <DataGridTextColumn Header="COLUMNAS" Binding="{Binding ColumnCount}" Width="110" />
+                                <DataGridTextColumn Header="MEDIDAS" Binding="{Binding MeasureCount}" Width="110" />
+                                <DataGridTextColumn Header="DESCRIPCIÓN" Binding="{Binding Description}" Width="320" />
+                                <DataGridCheckBoxColumn Header="OCULTA" Binding="{Binding IsHidden}" Width="72" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
 
                     <!-- 3 · Columnas -->
-                    <DataGrid x:Name="ColumnsGrid" AutoGenerateColumns="False" IsReadOnly="True" Visibility="Collapsed">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="TABLA" Binding="{Binding Table}" Width="210" />
-                            <DataGridTextColumn Header="COLUMNA" Binding="{Binding Name}" Width="230" />
-                            <DataGridTextColumn Header="TIPO DE DATO" Binding="{Binding DataType}" Width="140" />
-                            <DataGridTextColumn Header="ORIGEN" Binding="{Binding ColumnType}" Width="140" />
-                            <DataGridTextColumn Header="CARPETA" Binding="{Binding DisplayFolder}" Width="130" />
-                            <DataGridTextColumn Header="DAX / COLUMNA ORIGEN" Binding="{Binding DaxOrSource}" Width="*"
-                                                FontFamily="{StaticResource FontMono}" FontSize="11.5" />
-                            <DataGridCheckBoxColumn Header="OCULTA" Binding="{Binding IsHidden}" Width="72" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid x:Name="ColumnsPane" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBox x:Name="ColumnsSearchBox" Grid.Row="0" Margin="16,14,16,0"
+                                 Style="{StaticResource SearchBox}" TextChanged="GridSearchBox_TextChanged" />
+                        <DataGrid x:Name="ColumnsGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="TABLA" Binding="{Binding Table}" Width="210" />
+                                <DataGridTextColumn Header="COLUMNA" Binding="{Binding Name}" Width="230" />
+                                <DataGridTextColumn Header="TIPO DE DATO" Binding="{Binding DataType}" Width="140" />
+                                <DataGridTextColumn Header="ORIGEN" Binding="{Binding ColumnType}" Width="140" />
+                                <DataGridTextColumn Header="CARPETA" Binding="{Binding DisplayFolder}" Width="130" />
+                                <DataGridTextColumn Header="DAX / COLUMNA ORIGEN" Binding="{Binding DaxOrSource}" Width="380"
+                                                    FontFamily="{StaticResource FontMono}" FontSize="11.5" />
+                                <DataGridCheckBoxColumn Header="OCULTA" Binding="{Binding IsHidden}" Width="72" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
 
                     <!-- 4 · Relaciones -->
-                    <DataGrid x:Name="RelationshipsGrid" AutoGenerateColumns="False" IsReadOnly="True" Visibility="Collapsed">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="DESDE" Binding="{Binding FromTable}" Width="180" />
-                            <DataGridTextColumn Header="COLUMNA" Binding="{Binding FromColumn}" Width="180" />
-                            <DataGridTextColumn Header="HACIA" Binding="{Binding ToTable}" Width="180" />
-                            <DataGridTextColumn Header="COLUMNA" Binding="{Binding ToColumn}" Width="180" />
-                            <DataGridTextColumn Header="CARDINALIDAD" Binding="{Binding Cardinality}" Width="150" />
-                            <DataGridTextColumn Header="FILTRO CRUZADO" Binding="{Binding CrossFilterBehavior}" Width="*" />
-                            <DataGridCheckBoxColumn Header="ACTIVA" Binding="{Binding IsActive}" Width="72" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid x:Name="RelationshipsPane" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBox x:Name="RelationshipsSearchBox" Grid.Row="0" Margin="16,14,16,0"
+                                 Style="{StaticResource SearchBox}" TextChanged="GridSearchBox_TextChanged" />
+                        <DataGrid x:Name="RelationshipsGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="DESDE" Binding="{Binding FromTable}" Width="180" />
+                                <DataGridTextColumn Header="COLUMNA" Binding="{Binding FromColumn}" Width="180" />
+                                <DataGridTextColumn Header="HACIA" Binding="{Binding ToTable}" Width="180" />
+                                <DataGridTextColumn Header="COLUMNA" Binding="{Binding ToColumn}" Width="180" />
+                                <DataGridTextColumn Header="CARDINALIDAD" Binding="{Binding Cardinality}" Width="150" />
+                                <DataGridTextColumn Header="FILTRO CRUZADO" Binding="{Binding CrossFilterBehavior}" Width="180" />
+                                <DataGridCheckBoxColumn Header="ACTIVA" Binding="{Binding IsActive}" Width="72" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
 
                     <!-- 5 · Power Query (M) -->
-                    <DataGrid x:Name="PowerQueryGrid" AutoGenerateColumns="False" IsReadOnly="True" Visibility="Collapsed">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="NOMBRE" Binding="{Binding Name}" Width="220" />
-                            <DataGridTextColumn Header="TIPO" Binding="{Binding Kind}" Width="140" />
-                            <DataGridTextColumn Header="CÓDIGO M" Binding="{Binding MCode}" Width="*"
-                                                FontFamily="{StaticResource FontMono}" FontSize="11.5" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid x:Name="PowerQueryPane" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBox x:Name="PowerQuerySearchBox" Grid.Row="0" Margin="16,14,16,0"
+                                 Style="{StaticResource SearchBox}" TextChanged="GridSearchBox_TextChanged" />
+                        <DataGrid x:Name="PowerQueryGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="NOMBRE" Binding="{Binding Name}" Width="220" />
+                                <DataGridTextColumn Header="TIPO" Binding="{Binding Kind}" Width="140" />
+                                <DataGridTextColumn Header="CÓDIGO M" Binding="{Binding MCode}" Width="500"
+                                                    FontFamily="{StaticResource FontMono}" FontSize="11.5" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
 
                     <!-- 6 · Uso y limpieza -->
                     <Grid x:Name="UsagePane" Visibility="Collapsed">
@@ -247,7 +290,7 @@
                                                     <Setter Property="Foreground" Value="#C0392B" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Status}" Value="Solo uso interno">
-                                                    <Setter Property="Foreground" Value="#B7791F" />
+                                                    <Setter Property="Foreground" Value="#96650F" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Status}" Value="En uso">
                                                     <Setter Property="Foreground" Value="#1C7C4C" />
@@ -256,9 +299,9 @@
                                         </Style>
                                     </DataGridTextColumn.CellStyle>
                                 </DataGridTextColumn>
-                                <DataGridTextColumn Header="DEPENDE DE" Binding="{Binding DependsOnText}" Width="*"
+                                <DataGridTextColumn Header="DEPENDE DE" Binding="{Binding DependsOnText}" Width="260"
                                                     FontFamily="{StaticResource FontMono}" FontSize="11" />
-                                <DataGridTextColumn Header="USADO POR" Binding="{Binding UsedByText}" Width="*"
+                                <DataGridTextColumn Header="USADO POR" Binding="{Binding UsedByText}" Width="260"
                                                     FontFamily="{StaticResource FontMono}" FontSize="11" />
                             </DataGrid.Columns>
                         </DataGrid>
@@ -273,7 +316,7 @@
                                 <DataGridTextColumn Header="TÍTULO" Binding="{Binding Title}" Width="200" />
                                 <DataGridTextColumn Header="TIPO" Binding="{Binding FieldKind}" Width="100" />
                                 <DataGridTextColumn Header="TABLA" Binding="{Binding Table}" Width="180" />
-                                <DataGridTextColumn Header="CAMPO" Binding="{Binding Field}" Width="*" />
+                                <DataGridTextColumn Header="CAMPO" Binding="{Binding Field}" Width="220" />
                             </DataGrid.Columns>
                         </DataGrid>
 
@@ -297,6 +340,123 @@
                                         Margin="0,20,0,0" Click="ChoosePbixButton_Click" />
                             </StackPanel>
                         </Border>
+                    </Grid>
+
+                    <!-- 8 · Rendimiento -->
+                    <Grid x:Name="PerformancePane" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Margin="16,14,16,4">
+                            <TextBlock FontFamily="{StaticResource FontSmall}" FontSize="11"
+                                       Foreground="{StaticResource InkFaint}" TextWrapping="Wrap"
+                                       Text="Heurísticas sobre patrones conocidos como antipatrón (relaciones bidireccionales o muchos a muchos, columnas calculadas, CALCULATE anidado). Esta herramienta nunca consulta filas reales, así que no puede medir cardinalidad ni tiempo de query real — son pistas para revisar, no un profiler." />
+                        </StackPanel>
+
+                        <DataGrid x:Name="PerformanceGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="SEVERIDAD" Binding="{Binding Severity}" Width="90">
+                                    <DataGridTextColumn.CellStyle>
+                                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Alta">
+                                                    <Setter Property="Foreground" Value="#C0392B" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Severity}" Value="Media">
+                                                    <Setter Property="Foreground" Value="#96650F" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGridTextColumn.CellStyle>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Header="CATEGORÍA" Binding="{Binding Category}" Width="190" />
+                                <DataGridTextColumn Header="TABLA" Binding="{Binding Table}" Width="150" />
+                                <DataGridTextColumn Header="OBJETO" Binding="{Binding Subject}" Width="220" />
+                                <DataGridTextColumn Header="DETALLE" Binding="{Binding Message}" Width="420" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <!-- Estado vacío: sin alertas es una buena noticia, hay que decirlo como tal -->
+                        <Border x:Name="PerformanceEmptyState" Grid.Row="1" Background="{StaticResource CardBg}">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="420">
+                                <TextBlock Text="&#xE73E;" FontFamily="{StaticResource FontIcon}"
+                                           FontSize="42" Foreground="{StaticResource InkFaint}"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock x:Name="PerformanceEmptyTitle" Text="Sin alertas detectadas"
+                                           FontFamily="{StaticResource FontDisplay}" FontSize="17" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Ink}" HorizontalAlignment="Center"
+                                           Margin="0,16,0,0" TextWrapping="Wrap" TextAlignment="Center" />
+                                <TextBlock x:Name="PerformanceEmptyBody"
+                                           Text="No se encontraron patrones conocidos de riesgo en este modelo."
+                                           FontFamily="{StaticResource FontText}" FontSize="12.5"
+                                           Foreground="{StaticResource InkDim}" HorizontalAlignment="Center"
+                                           Margin="0,8,0,0" TextWrapping="Wrap" TextAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- 9 · Comparar versiones -->
+                    <Grid x:Name="ComparePane" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Margin="16,14,16,4">
+                            <TextBlock FontFamily="{StaticResource FontSmall}" FontSize="11"
+                                       Foreground="{StaticResource InkFaint}" TextWrapping="Wrap"
+                                       Text="Compara el modelo conectado ahora contra un snapshot .json exportado antes (botón &quot;Exportar JSON&quot;) del mismo tablero — pensado para auditar qué cambió entre una versión y otra." />
+                        </StackPanel>
+
+                        <Border x:Name="CompareEmptyState" Grid.Row="1" Background="{StaticResource CardBg}">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="420">
+                                <TextBlock Text="&#xE8AB;" FontFamily="{StaticResource FontIcon}"
+                                           FontSize="42" Foreground="{StaticResource InkFaint}"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock x:Name="CompareEmptyTitle" Text="Elegí un snapshot para comparar"
+                                           FontFamily="{StaticResource FontDisplay}" FontSize="17" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Ink}" HorizontalAlignment="Center"
+                                           Margin="0,16,0,0" TextWrapping="Wrap" TextAlignment="Center" />
+                                <TextBlock x:Name="CompareEmptyBody"
+                                           Text="Elegí un archivo .json exportado antes de este mismo tablero para ver qué cambió desde entonces."
+                                           FontFamily="{StaticResource FontText}" FontSize="12.5"
+                                           Foreground="{StaticResource InkDim}" HorizontalAlignment="Center"
+                                           Margin="0,8,0,0" TextWrapping="Wrap" TextAlignment="Center" />
+                                <Button Content="Elegir snapshot .json…"
+                                        Style="{StaticResource AccentButton}" HorizontalAlignment="Center"
+                                        Margin="0,20,0,0" Click="ChooseSnapshotButton_Click" />
+                            </StackPanel>
+                        </Border>
+
+                        <DataGrid x:Name="CompareGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True"
+                                  Visibility="Collapsed">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="CAMBIO" Binding="{Binding KindText}" Width="110">
+                                    <DataGridTextColumn.CellStyle>
+                                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding KindText}" Value="Agregado">
+                                                    <Setter Property="Foreground" Value="#1C7C4C" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding KindText}" Value="Eliminado">
+                                                    <Setter Property="Foreground" Value="#C0392B" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding KindText}" Value="Modificado">
+                                                    <Setter Property="Foreground" Value="#96650F" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGridTextColumn.CellStyle>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Header="CATEGORÍA" Binding="{Binding Category}" Width="120" />
+                                <DataGridTextColumn Header="OBJETO" Binding="{Binding Name}" Width="260" />
+                                <DataGridTextColumn Header="DETALLE" Binding="{Binding Detail}" Width="420" />
+                            </DataGrid.Columns>
+                        </DataGrid>
                     </Grid>
 
                     <!-- Estado vacío del modelo: cubre las 5 secciones del modelo (Medidas/Tablas/Columnas/

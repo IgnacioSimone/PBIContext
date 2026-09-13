@@ -1,14 +1,18 @@
 namespace PBIExplorer.Models;
 
-/// <summary>Todo lo que se pudo leer del modelo, más las secciones que fallaron.</summary>
+/// <summary>Todo lo que se pudo leer del modelo, más las secciones que fallaron.
+/// Las colecciones llevan setter (no solo get) aunque el código siempre las mute in
+/// place con .Add(...) — System.Text.Json no repuebla una propiedad de colección de
+/// solo lectura al deserializar (JsonModelExporter.Load necesita esto para reconstruir
+/// un snapshot guardado antes).</summary>
 public class ModelSnapshot
 {
-    public List<TableInfo> Tables { get; } = new();
-    public List<ColumnInfo> Columns { get; } = new();
-    public List<MeasureInfo> Measures { get; } = new();
-    public List<RelationshipInfo> Relationships { get; } = new();
-    public List<PowerQueryInfo> PowerQueries { get; } = new();
-    public List<string> Warnings { get; } = new();
+    public List<TableInfo> Tables { get; set; } = new();
+    public List<ColumnInfo> Columns { get; set; } = new();
+    public List<MeasureInfo> Measures { get; set; } = new();
+    public List<RelationshipInfo> Relationships { get; set; } = new();
+    public List<PowerQueryInfo> PowerQueries { get; set; } = new();
+    public List<string> Warnings { get; set; } = new();
 }
 
 public class TableInfo
